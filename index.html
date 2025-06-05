@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat On-Chain | Monad Testnet</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js" type="application/javascript"></script>
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2a2a2a;
+            --bg-own-message: #3a2a4a;
+            --accent-color: #7b2ff7;
+            --accent-hover: #9a5ff9;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --success: #4caf50;
+            --error: #f44336;
+            --warning: #ff9800;
+            --border-radius: 12px;
+            --box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background-color: var(--bg-secondary);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--box-shadow);
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+        }
+
+        .wallet-container {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .wallet-btn, .edit-username-btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .wallet-btn:hover, .edit-username-btn:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .wallet-btn:disabled {
+            background-color: var(--bg-tertiary);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .disconnect-btn {
+            background-color: var(--error);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .disconnect-btn:hover {
+            background-color: #d32f2f;
+            transform: translateY(-2px);
+        }
+
+        .wallet-address {
+            background-color: var(--bg-tertiary);
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .wallet-address::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success);
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem;
+            margin-top: 80px;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .messages-container {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-color) var(--bg-secondary);
+        }
+
+        .messages-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background-color: var(--accent-color);
+            border-radius: 4px;
+        }
+
+        .scroll-to-bottom {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--box-shadow);
+            transition: var(--transition);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .scroll-to-bottom.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .scroll-to-bottom:hover {
+            background-color: var(--accent-hover);
+            transform: scale(1.1);
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            position: relative;
+            transition: var(--transition);
+            max-width: 70%;
+        }
+
+        .message.own {
+            background-color: var(--bg-own-message);
+            align-self: flex-end;
+            border-right: 4px solid var(--accent-color);
+        }
+
+        .message.other {
+            background-color: var(--bg-tertiary);
+            align-self: flex-start;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-user {
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .message-content {
+            word-break: break-word;
+        }
+
+        .message-actions {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            display: none;
+            gap: 0.5rem;
+        }
+
+        .message:hover .message-actions {
+            display: flex;
+        }
+
+        .message-action {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition);
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .message-action:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .message-deleted {
+            opacity: 0.6;
+            border-left-color: var(--error);
+            border-right-color: var(--error);
+        }
+
+        .message-deleted .message-content {
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+
+        .input-container {
+            padding: 1.5rem;
+            background-color: var(--bg-tertiary);
+            display: flex;
+            gap: 1rem;
+            flex-direction: column;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            border: none;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            resize: none;
+            min-height: 60px;
+            max-height: 120px;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .message-input:focus {
+            box-shadow: 0 0 0 2px var(--accent-color);
+        }
+
+        .send-btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            align-self: flex-end;
+            height: 60px;
+        }
+
+        .send-btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .send-btn:disabled {
+            background-color: var(--bg-secondary);
+            cursor: not-allowed;
+        }
+
+        .username-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition);
+        }
+
+        .username-modal.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .username-container {
+            background-color: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            width: 100%;
+            max-width: 500px;
+            box-shadow: var(--box-shadow);
+            transform: translateY(20px);
+            transition: var(--transition);
+        }
+
+        .username-modal.active .username-container {
+            transform: translateY(0);
+        }
+
+        .username-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--accent-color);
+        }
+
+        .username-input {
+            width: 100%;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            border: none;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            outline: none;
+        }
+
+        .username-input:focus {
+            box-shadow: 0 0 0 2px var(--accent-color);
+        }
+
+        .username-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .username-submit {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            flex: 1;
+        }
+
+        .username-submit:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .username-cancel {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            flex: 1;
+        }
+
+        .username-cancel:hover {
+            background-color: var(--bg-primary);
+        }
+
+        .edit-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition);
+        }
+
+        .edit-modal.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .edit-container {
+            background-color: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            width: 100%;
+            max-width: 500px;
+            box-shadow: var(--box-shadow);
+            transform: translateY(20px);
+            transition: var(--transition);
+        }
+
+        .edit-modal.active .edit-container {
+            transform: translateY(0);
+        }
+
+        .edit-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--accent-color);
+        }
+
+        .edit-input {
+            width: 100%;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            border: none;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            outline: none;
+            resize: none;
+            min-height: 100px;
+        }
+
+        .edit-input:focus {
+            box-shadow: 0 0 0 2px var(--accent-color);
+        }
+
+        .edit-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .edit-submit {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            flex: 1;
+        }
+
+        .edit-submit:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .edit-cancel {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            transition: var(--transition);
+            flex: 1;
+        }
+
+        .edit-cancel:hover {
+            background-color: var(--bg-primary);
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 6rem;
+            right: 2rem;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transform: translateX(200%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+
+        .notification.active {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .notification.error {
+            border-left: 4px solid var(--error);
+        }
+
+        .notification.warning {
+            border-left: 4px solid var(--warning);
+        }
+
+        .notification-icon {
+            font-size: 1.5rem;
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: auto;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .network-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-left: 1rem;
+        }
+
+        .network-indicator::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success);
+        }
+
+        .network-indicator.wrong-network::before {
+            background-color: var(--error);
+        }
+
+        footer {
+            background-color: var(--bg-secondary);
+            padding: 1rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: var(--accent-color);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        footer a:hover {
+            color: var(--accent-hover);
+        }
+
+        .character-counter {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            align-self: flex-end;
+        }
+
+        .character-counter.warning {
+            color: var(--warning);
+        }
+
+        .character-counter.error {
+            color: var(--error);
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .wallet-container {
+                width: 100%;
+                justify-content: space-between;
+                flex-wrap: wrap;
+            }
+
+            main {
+                padding: 1rem;
+                margin-top: 120px;
+            }
+
+            .messages-container {
+                padding: 1rem;
+            }
+
+            .input-container {
+                padding: 1rem;
+            }
+
+            .send-btn {
+                width: 100%;
+                height: auto;
+                padding: 0.75rem;
+            }
+
+            .notification {
+                bottom: 6rem;
+                right: 1rem;
+                left: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+
+            .scroll-to-bottom {
+                bottom: 1rem;
+                right: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Chat On-Chain</span>
+        </div>
+        <div class="wallet-container">
+            <span class="network-indicator" id="networkIndicator">Monad Testnet</span>
+            <button id="connectWallet" class="wallet-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21 12C21 13.78 20.4722 15.5201 19.4832 17.0001C18.4943 18.4802 17.0887 19.6337 15.4442 20.3149C13.7996 20.9961 11.99 21.1743 10.2442 20.8271C8.49836 20.4798 6.89472 19.6226 5.63604 18.364C4.37737 17.1053 3.5202 15.5016 3.17294 13.7558C2.82567 12.01 3.0039 10.2004 3.68509 8.55585C4.36628 6.91131 5.51983 5.50571 6.99987 4.51677C8.47991 3.52784 10.22 3 12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M16 8L20 12L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M10 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Conectar Carteira
+            </button>
+            <div id="walletInfo" class="wallet-address" style="display: none;">
+                <span id="walletAddress"></span>
+            </div>
+            <button id="editUsername" class="edit-username-btn" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Editar Usuário
+            </button>
+            <button id="disconnectWallet" class="disconnect-btn" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Desconectar
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div class="chat-container">
+            <div class="messages-container" id="messagesContainer"></div>
+            <button class="scroll-to-bottom" id="scrollToBottom">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 5V19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M19 12L12 19L5 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <div class="input-container">
+                <textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." maxlength="250" disabled></textarea>
+                <span class="character-counter" id="messageInputCounter">0/250</span>
+                <button class="send-btn" id="sendButton" disabled>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        Desenvolvido por <a href="https://x.com/0xGustavo" target="_blank">0xGus</a>
+    </footer>
+
+    <div class="username-modal" id="usernameModal">
+        <div class="username-container">
+            <h2 class="username-title" id="usernameModalTitle">Defina seu nome de usuário</h2>
+            <p id="usernameModalDescription">Escolha um nome único que será exibido no chat.</p>
+            <input type="text" class="username-input" id="usernameInput" placeholder="Nome de usuário">
+            <div class="username-actions">
+                <button class="username-cancel" id="usernameCancel">Cancelar</button>
+                <button class="username-submit" id="usernameSubmit">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="edit-modal" id="editModal">
+        <div class="edit-container">
+            <h2 class="edit-title">Editar Mensagem</h2>
+            <textarea class="edit-input" id="editInput" maxlength="250"></textarea>
+            <span class="character-counter" id="editInputCounter">0/250</span>
+            <div class="edit-actions">
+                <button class="edit-cancel" id="editCancel">Cancelar</button>
+                <button class="edit-submit" id="editSubmit">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        <div class="notification-icon"></div>
+        <div class="notification-content" id="notificationContent"></div>
+        <button class="notification-close" id="notificationClose">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        // Configurações
+        const CONTRACT_ADDRESS = "0xCb96Ad74f762DEad03aa413B87131079C06A6C87";
+        const MONAD_TESTNET = {
+            chainId: "0x279f",
+            chainName: "Monad Testnet",
+            rpcUrls: ["https://testnet-rpc.monad.xyz"],
+            nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+            blockExplorerUrls: ["https://testnet-monadexplorer.com"]
+        };
+        const ABI = [
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "_endereco",
+                        "type": "address"
+                    }
+                ],
+                "name": "banirUsuario",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "_endereco",
+                        "type": "address"
+                    }
+                ],
+                "name": "desbanirUsuario",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "_id",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "_novoConteudo",
+                        "type": "string"
+                    }
+                ],
+                "name": "editarMensagem",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "string",
+                        "name": "_novoUsuario",
+                        "type": "string"
+                    }
+                ],
+                "name": "editarUsuario",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "string",
+                        "name": "_conteudo",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "_timestamp",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "enviarMensagem",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "_id",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "excluirMensagem",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "id",
+                        "type": "uint256"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "novoConteudo",
+                        "type": "string"
+                    }
+                ],
+                "name": "MensagemEditada",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "id",
+                        "type": "uint256"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "address",
+                        "name": "remetente",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "usuario",
+                        "type": "string"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "conteudo",
+                        "type": "string"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "MensagemEnviada",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "id",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "MensagemExcluida",
+                "type": "event"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "string",
+                        "name": "_usuario",
+                        "type": "string"
+                    }
+                ],
+                "name": "registrarUsuario",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "address",
+                        "name": "endereco",
+                        "type": "address"
+                    }
+                ],
+                "name": "UsuarioBanido",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "address",
+                        "name": "endereco",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "novoUsuario",
+                        "type": "string"
+                    }
+                ],
+                "name": "UsuarioEditado",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "address",
+                        "name": "endereco",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "usuario",
+                        "type": "string"
+                    }
+                ],
+                "name": "UsuarioRegistrado",
+                "type": "event"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "name": "banidos",
+                "outputs": [
+                    {
+                        "internalType": "bool",
+                        "name": "",
+                        "type": "bool"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "contadorMensagens",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "dono",
+                "outputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "mensagens",
+                "outputs": [
+                    {
+                        "internalType": "address",
+                        "name": "remetente",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "usuario",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "conteudo",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "bool",
+                        "name": "excluida",
+                        "type": "bool"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "string",
+                        "name": "",
+                        "type": "string"
+                    }
+                ],
+                "name": "nomeParaEndereco",
+                "outputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "obterMensagens",
+                "outputs": [
+                    {
+                        "components": [
+                            {
+                                "internalType": "address",
+                                "name": "remetente",
+                                "type": "address"
+                            },
+                            {
+                                "internalType": "string",
+                                "name": "usuario",
+                                "type": "string"
+                            },
+                            {
+                                "internalType": "string",
+                                "name": "conteudo",
+                                "type": "string"
+                            },
+                            {
+                                "internalType": "uint256",
+                                "name": "timestamp",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "bool",
+                                "name": "excluida",
+                                "type": "bool"
+                            }
+                        ],
+                        "internalType": "struct ChatOnChainV2.Mensagem[]",
+                        "name": "",
+                        "type": "tuple[]"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "name": "usuarios",
+                "outputs": [
+                    {
+                        "internalType": "string",
+                        "name": "",
+                        "type": "string"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+        const MESSAGES_LIMIT = 20;
+        const POLL_INTERVAL = 3000;
+        const MAX_MESSAGE_LENGTH = 250;
+
+        // Elementos DOM
+        const connectWalletBtn = document.getElementById('connectWallet');
+        const disconnectWalletBtn = document.getElementById('disconnectWallet');
+        const walletInfo = document.getElementById('walletInfo');
+        const walletAddress = document.getElementById('walletAddress');
+        const editUsernameBtn = document.getElementById('editUsername');
+        const networkIndicator = document.getElementById('networkIndicator');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const messageInputCounter = document.getElementById('messageInputCounter');
+        const sendButton = document.getElementById('sendButton');
+        const usernameModal = document.getElementById('usernameModal');
+        const usernameModalTitle = document.getElementById('usernameModalTitle');
+        const usernameModalDescription = document.getElementById('usernameModalDescription');
+        const usernameInput = document.getElementById('usernameInput');
+        const usernameSubmit = document.getElementById('usernameSubmit');
+        const usernameCancel = document.getElementById('usernameCancel');
+        const editModal = document.getElementById('editModal');
+        const editInput = document.getElementById('editInput');
+        const editInputCounter = document.getElementById('editInputCounter');
+        const editSubmit = document.getElementById('editSubmit');
+        const editCancel = document.getElementById('editCancel');
+        const notification = document.getElementById('notification');
+        const notificationContent = document.getElementById('notificationContent');
+        const notificationClose = document.getElementById('notificationClose');
+        const scrollToBottomBtn = document.getElementById('scrollToBottom');
+
+        // Variáveis globais
+        let provider;
+        let signer;
+        let contract;
+        let currentAccount = null;
+        let currentUsername = null;
+        let isOwner = false;
+        let lastMessageCount = 0;
+        let pollInterval;
+        let editingMessageId = null;
+        let isEditingUsername = false;
+        let messageCache = [];
+
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', async () => {
+            provider = window.ethereum
+                ? new ethers.providers.Web3Provider(window.ethereum)
+                : new ethers.providers.JsonRpcProvider(MONAD_TESTNET.rpcUrls[0]);
+            contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+
+            await loadMessages();
+
+            if (window.ethereum) {
+                try {
+                    const accounts = await provider.listAccounts();
+                    if (accounts.length > 0) {
+                        await handleWalletConnected(accounts[0]);
+                    } else {
+                        await checkNetwork(); // Verifica a rede mesmo sem carteira conectada
+                    }
+                } catch (error) {
+                    console.error("Erro ao verificar conexão inicial:", error);
+                    showNotification("Erro ao verificar conexão inicial. Tente reconectar.", "error");
+                }
+
+                window.ethereum.on('accountsChanged', async (accounts) => {
+                    if (accounts.length > 0) {
+                        await handleWalletConnected(accounts[0]);
+                    } else {
+                        handleWalletDisconnected();
+                    }
+                });
+
+                window.ethereum.on('chainChanged', () => {
+                    window.location.reload();
+                });
+            } else {
+                connectWalletBtn.textContent = "Instale MetaMask";
+                connectWalletBtn.disabled = true;
+                showNotification("MetaMask não está instalado. Você pode visualizar mensagens, mas precisa do MetaMask para interagir.", "warning");
+                await loadMessages(); // Carrega mensagens mesmo sem MetaMask
+            }
+
+            // Event listeners
+            connectWalletBtn.addEventListener('click', connectWallet);
+            disconnectWalletBtn.addEventListener('click', disconnectWallet);
+            editUsernameBtn.addEventListener('click', () => showUsernameModal(true));
+            sendButton.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            messageInput.addEventListener('input', updateMessageCounter);
+            usernameSubmit.addEventListener('click', setUsername);
+            usernameCancel.addEventListener('click', () => usernameModal.classList.remove('active'));
+            editSubmit.addEventListener('click', editMessage);
+            editInput.addEventListener('input', updateEditCounter);
+            editCancel.addEventListener('click', () => editModal.classList.remove('active'));
+            notificationClose.addEventListener('click', () => notification.classList.remove('active'));
+            scrollToBottomBtn.addEventListener('click', () => {
+                messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'smooth' });
+            });
+
+            messagesContainer.addEventListener('scroll', updateScrollButtonVisibility);
+            updateMessageCounter();
+            updateEditCounter();
+        });
+
+        // Conectar carteira
+        async function connectWallet() {
+            if (!window.ethereum) {
+                showNotification("MetaMask não está instalado.", "error");
+                return;
+            }
+
+            try {
+                connectWalletBtn.disabled = true;
+                connectWalletBtn.innerHTML = '<span class="loading"></span> Conectando...';
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                await checkNetwork();
+                const accounts = await provider.listAccounts();
+                if (accounts.length > 0) {
+                    await handleWalletConnected(accounts[0]);
+                    showNotification("Carteira conectada com sucesso!", "success");
+                }
+            } catch (error) {
+                console.error("Erro ao conectar carteira:", error);
+                let errorMessage = "Erro ao conectar carteira.";
+                if (error.code === 4001) {
+                    errorMessage = "Conexão rejeitada pelo usuário.";
+                } else if (error.message.includes("network")) {
+                    errorMessage = "Erro ao configurar a rede Monad Testnet.";
+                }
+                showNotification(errorMessage, "error");
+            } finally {
+                connectWalletBtn.disabled = false;
+                connectWalletBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 12C21 13.78 20.4722 15.5201 19.4832 17.0001C18.4943 18.4802 17.0887 19.6337 15.4442 20.3149C13.7996 20.9961 11.99 21.1743 10.2442 20.8271C8.49836 20.4798 6.89472 19.6226 5.63604 18.364C4.37737 17.1053 3.5202 15.5016 3.17294 13.7558C2.82567 12.01 3.0039 10.2004 3.68509 8.55585C4.36628 6.91131 5.51983 5.50571 6.99987 4.51677C8.47991 3.52784 10.22 3 12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 8L20 12L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Conectar Carteira';
+            }
+        }
+
+        // Desconectar carteira
+        async function disconnectWallet() {
+            try {
+                disconnectWalletBtn.disabled = true;
+                handleWalletDisconnected();
+                showNotification("Carteira desconectada com sucesso!", "success");
+            } catch (error) {
+                console.error("Erro ao desconectar carteira:", error);
+                showNotification("Erro ao desconectar carteira.", "error");
+            } finally {
+                disconnectWalletBtn.disabled = false;
+            }
+        }
+
+        // Verificar rede
+        async function checkNetwork() {
+            try {
+                if (!window.ethereum) {
+                    throw new Error("MetaMask não está instalado.");
+                }
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                if (chainId !== MONAD_TESTNET.chainId) {
+                    networkIndicator.textContent = "Rede Incorreta";
+                    networkIndicator.classList.add('wrong-network');
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: MONAD_TESTNET.chainId }],
+                        });
+                    } catch (switchError) {
+                        if (switchError.code === 4902) {
+                            await window.ethereum.request({
+                                method: 'wallet_addEthereumChain',
+                                params: [MONAD_TESTNET],
+                            });
+                        } else {
+                            showNotification("Por favor, conecte-se à Monad Testnet.", "warning");
+                            throw switchError;
+                        }
+                    }
+                }
+                networkIndicator.textContent = "Monad Testnet";
+                networkIndicator.classList.remove('wrong-network');
+                networkIndicator.style.setProperty('--success', '#4caf50');
+                await loadMessages(); // Carrega mensagens após verificar a rede
+            } catch (error) {
+                console.error("Erro ao verificar rede:", error);
+                networkIndicator.textContent = "Rede Incorreta";
+                networkIndicator.classList.add('wrong-network');
+                showNotification("Por favor, conecte-se à Monad Testnet para interagir com o chat.", "warning");
+                // Continua permitindo a visualização de mensagens mesmo na rede errada
+                await loadMessages();
+            }
+        }
+
+        // Manipulador de conexão bem-sucedida
+        async function handleWalletConnected(account) {
+            currentAccount = account.toLowerCase();
+            signer = provider.getSigner();
+            contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+            try {
+                await contract.dono();
+            } catch (error) {
+                console.error("Erro ao acessar o contrato:", error);
+                showNotification("Contrato inválido ou não implantado na rede atual.", "error");
+                handleWalletDisconnected();
+                return;
+            }
+
+            connectWalletBtn.style.display = 'none';
+            walletInfo.style.display = 'flex';
+            disconnectWalletBtn.style.display = 'flex';
+            editUsernameBtn.style.display = 'flex';
+            walletAddress.textContent = `${account.substring(0, 6)}...${account.substring(account.length - 4)}`;
+
+            try {
+                const owner = (await contract.dono()).toLowerCase();
+                isOwner = owner === currentAccount;
+                const isBanned = await contract.banidos(currentAccount);
+                if (isBanned) {
+                    showNotification("Você está banido deste chat.", "error");
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
+                    return;
+                }
+
+                const username = await contract.usuarios(currentAccount);
+                if (!username || username === "") {
+                    showUsernameModal();
+                } else {
+                    currentUsername = username;
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                }
+
+                await loadMessages();
+                if (pollInterval) clearInterval(pollInterval);
+                pollInterval = setInterval(checkUpdates, POLL_INTERVAL);
+            } catch (error) {
+                console.error("Erro ao configurar sessão:", error);
+                showNotification("Erro ao carregar dados do usuário: " + (error.reason || error.message), "error");
+            }
+        }
+
+        // Manipulador de desconexão
+        function handleWalletDisconnected() {
+            currentAccount = null;
+            currentUsername = null;
+            isOwner = false;
+            connectWalletBtn.style.display = 'block';
+            walletInfo.style.display = 'none';
+            disconnectWalletBtn.style.display = 'none';
+            editUsernameBtn.style.display = 'none';
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            if (pollInterval) clearInterval(pollInterval);
+            loadMessages();
+        }
+
+        // Mostrar modal de nome de usuário
+        function showUsernameModal(isEditing = false) {
+            isEditingUsername = isEditing;
+            usernameModalTitle.textContent = isEditing ? "Editar Nome de Usuário" : "Defina seu nome de usuário";
+            usernameModalDescription.textContent = isEditing ? "Escolha um novo nome único para exibir no chat." : "Escolha um nome único que será exibido no chat.";
+            usernameInput.value = isEditing ? currentUsername || '' : '';
+            usernameModal.classList.add('active');
+            usernameInput.focus();
+        }
+
+        // Definir ou editar nome de usuário
+        async function setUsername() {
+            const username = usernameInput.value.trim();
+            if (!username) {
+                showNotification("Nome de usuário não pode ser vazio.", "error");
+                return;
+            }
+
+            try {
+                usernameSubmit.disabled = true;
+                usernameSubmit.innerHTML = '<span class="loading"></span> Atualizando...';
+                let tx;
+                if (isEditingUsername) {
+                    tx = await contract.editarUsuario(username);
+                } else {
+                    tx = await contract.registrarUsuario(username);
+                }
+                await tx.wait();
+                currentUsername = username;
+                usernameModal.classList.remove('active');
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                showNotification(`Nome de usuário ${isEditingUsername ? 'editado' : 'registrado'} com sucesso!`, "success");
+                await loadMessages();
+            } catch (error) {
+                console.error("Erro ao configurar nome de usuário:", error);
+                let errorMessage = `Erro ao ${isEditingUsername ? 'editar' : 'registrar'} nome de usuário.`;
+                if (error.reason && error.reason.includes("Nome de usuario ja em uso")) {
+                    errorMessage = "Este nome de usuário já está em uso.";
+                } else if (error.reason && error.reason.includes("Usuario ja registrado")) {
+                    errorMessage = "Usuário já registrado para este endereço.";
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                showNotification(errorMessage, "error");
+            } finally {
+                usernameSubmit.disabled = false;
+                usernameSubmit.textContent = 'Confirmar';
+            }
+        }
+
+        // Atualizar contador de caracteres
+        function updateMessageCounter() {
+            const count = messageInput.value.length;
+            messageInputCounter.textContent = `${count}/${MAX_MESSAGE_LENGTH}`;
+            if (count >= MAX_MESSAGE_LENGTH * 0.8) {
+                messageInputCounter.classList.add('warning');
+            } else {
+                messageInputCounter.classList.remove('warning');
+            }
+            if (count === MAX_MESSAGE_LENGTH) {
+                messageInputCounter.classList.add('error');
+            } else {
+                messageInputCounter.classList.remove('error');
+            }
+        }
+
+        function updateEditCounter() {
+            const count = editInput.value.length;
+            editInputCounter.textContent = `${count}/${MAX_MESSAGE_LENGTH}`;
+            if (count >= MAX_MESSAGE_LENGTH * 0.8) {
+                editInputCounter.classList.add('warning');
+            } else {
+                editInputCounter.classList.remove('warning');
+            }
+            if (count === MAX_MESSAGE_LENGTH) {
+                editInputCounter.classList.add('error');
+            } else {
+                editInputCounter.classList.remove('error');
+            }
+        }
+
+        // Carregar mensagens
+        async function loadMessages() {
+            try {
+                const messageCount = await contract.contadorMensagens();
+                const totalMessages = parseInt(messageCount);
+                lastMessageCount = totalMessages;
+
+                const startIndex = Math.max(0, totalMessages - MESSAGES_LIMIT);
+                const rawMessages = await contract.obterMensagens();
+                const messagesToDisplay = rawMessages.slice(startIndex, totalMessages);
+
+                // Atualizar usernames
+                const senderAddresses = [...new Set(messagesToDisplay.map(msg => msg.remetente))];
+                const usernameMap = {};
+                for (const addr of senderAddresses) {
+                    const username = await contract.usuarios(addr);
+                    usernameMap[addr.toLowerCase()] = username || 'Anônimo';
+                }
+
+                const messages = messagesToDisplay.map(msg => ({
+                    ...msg,
+                    usuario: usernameMap[msg.remetente.toLowerCase()]
+                }));
+
+                messageCache = messages;
+                displayMessages(messages, startIndex);
+            } catch (error) {
+                console.error("Erro ao carregar mensagens:", error);
+                showNotification("Erro ao carregar mensagens. Verifique a conexão com a rede Monad Testnet.", "error");
+                messagesContainer.innerHTML = '<div class="message other"><div class="message-content">Erro ao carregar mensagens. Verifique a conexão com a rede.</div></div>';
+            }
+        }
+
+        // Verificar atualizações
+        async function checkUpdates() {
+            try {
+                const messageCount = await contract.contadorMensagens();
+                const newCount = parseInt(messageCount);
+
+                const startIndex = Math.max(0, newCount - MESSAGES_LIMIT);
+                const rawMessages = await contract.obterMensagens();
+                const messages = rawMessages.slice(startIndex, newCount);
+
+                // Atualizar usernames
+                const senderAddresses = [...new Set(messages.map(msg => msg.remetente))];
+                const usernameMap = {};
+                for (const addr of senderAddresses) {
+                    const username = await contract.usuarios(addr);
+                    usernameMap[addr.toLowerCase()] = username || 'Anônimo';
+                }
+
+                const updatedMessages = messages.map(msg => ({
+                    ...msg,
+                    usuario: usernameMap[msg.remetente.toLowerCase()]
+                }));
+
+                let hasChanged = false;
+
+                // Verificar mensagens novas
+                if (newCount > lastMessageCount) {
+                    hasChanged = true;
+                    lastMessageCount = newCount;
+                }
+
+                // Verificar mensagens editadas ou excluídas
+                if (!hasChanged && updatedMessages.length === messageCache.length) {
+                    for (let i = 0; i < updatedMessages.length; i++) {
+                        const cached = messageCache[i];
+                        const updated = updatedMessages[i];
+                        if (
+                            cached.conteudo !== updated.conteudo ||
+                            cached.excluida !== updated.excluida ||
+                            cached.usuario !== updated.usuario
+                        ) {
+                            hasChanged = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hasChanged) {
+                    messageCache = updatedMessages;
+                    displayMessages(updatedMessages, startIndex);
+                    if (messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100) {
+                        messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'smooth' });
+                    }
+                }
+            } catch (error) {
+                console.error("Erro ao verificar atualizações:", error);
+                showNotification("Erro ao verificar atualizações: " + (error.reason || error.message), "error");
+            }
+        }
+
+        // Exibir mensagens
+        function displayMessages(messages, startIndex = 0, append = false) {
+            if (messages.length === 0) {
+                messagesContainer.innerHTML = '<div class="message other"><div class="message-content">Nenhuma mensagem encontrada.</div></div>';
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            messages.forEach((msg, index) => {
+                if (msg.excluida && !isOwner) return;
+                const messageElement = document.createElement('div');
+                const isOwnMessage = currentAccount && msg.remetente.toLowerCase() === currentAccount;
+                messageElement.className = `message ${msg.excluida ? 'message-deleted' : ''} ${isOwnMessage ? 'own' : 'other'}`;
+                const utcTimestamp = parseInt(msg.timestamp) * 1000;
+                const localTimestamp = new Date(utcTimestamp);
+                const timeString = localTimestamp.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' });
+                const messageIndex = startIndex + index;
+
+                messageElement.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-user">${msg.usuario}</span>
+                        <span class="message-time">${timeString}</span>
+                    </div>
+                    <div class="message-content">${msg.excluida ? '[Mensagem excluída]' : msg.conteudo}</div>
+                    <div class="message-actions">
+                        ${!msg.excluida && (isOwnMessage || isOwner) ? `
+                            <button class="message-action" data-action="edit" data-id="${messageIndex}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96079 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M18.5 2.5C18.8978 2.10217 19.4374 1.87868 20 1.87868C20.5626 1.87868 21.1022 2.10217 21.5 2.5C21.8978 2.89782 22.1213 3.43739 22.1213 4C22.1213 4.56261 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                            <button class="message-action" data-action="delete" data-id="${messageIndex}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+                fragment.appendChild(messageElement);
+            });
+
+            if (append) {
+                messagesContainer.appendChild(fragment);
+            } else {
+                messagesContainer.innerHTML = '';
+                messagesContainer.appendChild(fragment);
+                messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'auto' });
+            }
+
+            attachEventListeners();
+            updateScrollButtonVisibility();
+        }
+
+        // Atualizar visibilidade do botão de rolagem
+        function updateScrollButtonVisibility() {
+            const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
+            scrollToBottomBtn.classList.toggle('visible', !isNearBottom);
+        }
+
+        // Adicionar listeners para ações de mensagem
+        function attachEventListeners() {
+            document.querySelectorAll('.message-action[data-action="edit"]').forEach(btn => {
+                btn.removeEventListener('click', handleEditClick); // Remove duplicatas
+                btn.addEventListener('click', handleEditClick);
+            });
+
+            document.querySelectorAll('.message-action[data-action="delete"]').forEach(btn => {
+                btn.removeEventListener('click', handleDeleteClick); // Remove duplicatas
+                btn.addEventListener('click', handleDeleteClick);
+            });
+        }
+
+        function handleEditClick(e) {
+            const id = parseInt(e.currentTarget.getAttribute('data-id'));
+            const messageElement = e.currentTarget.closest('.message');
+            const content = messageElement.querySelector('.message-content').textContent;
+            startEditMessage(id, content);
+        }
+
+        function handleDeleteClick(e) {
+            const id = parseInt(e.currentTarget.getAttribute('data-id'));
+            deleteMessage(id);
+        }
+
+        // Enviar mensagem
+        async function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content) {
+                showNotification("Mensagem não pode ser vazia.", "error");
+                return;
+            }
+
+            try {
+                sendButton.disabled = true;
+                sendButton.innerHTML = '<span class="loading"></span>';
+                const utcTimestamp = Math.floor(Date.now() / 1000); // Timestamp em UTC (segundos)
+                const tx = await contract.enviarMensagem(content, utcTimestamp);
+                await tx.wait();
+                messageInput.value = '';
+                updateMessageCounter();
+                showNotification("Mensagem enviada com sucesso!", "success");
+                await loadMessages();
+            } catch (error) {
+                console.error("Erro ao enviar mensagem:", error);
+                let errorMessage = "Erro ao enviar mensagem.";
+                if (error.reason && error.reason.includes("Registre")) {
+                    errorMessage = "Por favor, registre um usuário primeiro.";
+                    showUsernameModal();
+                } else if (error.reason) {
+                    errorMessage = error.reason;
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                showNotification(errorMessage, "error");
+            } finally {
+                sendButton.disabled = false;
+                sendButton.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                `;
+            }
+        }
+
+        // Iniciar edição de mensagem
+        function startEditMessage(id, content) {
+            editingMessageId = id;
+            editInput.value = content;
+            updateEditCounter();
+            editModal.classList.add('active');
+            editInput.focus();
+        }
+
+        // Editar mensagem
+        async function editMessage() {
+            const newContent = editInput.value.trim();
+            if (!newContent) {
+                showNotification("Mensagem não pode ser vazia.", "error");
+                return;
+            }
+
+            try {
+                editSubmit.disabled = true;
+                editSubmit.innerHTML = '<span class="loading"></span> Salvando...';
+                const tx = await contract.editarMensagem(editingMessageId, newContent);
+                await tx.wait();
+                editModal.classList.remove('active');
+                showNotification("Mensagem editada com sucesso!", "success");
+                await loadMessages();
+            } catch (error) {
+                console.error("Erro ao editar mensagem:", error);
+                let errorMessage = "Erro ao editar mensagem.";
+                if (error.reason && error.reason.includes("Somente")) {
+                    errorMessage = "Apenas o remetente pode editar esta mensagem.";
+                } else if (error.reason) {
+                    errorMessage = error.reason;
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                showNotification(errorMessage, "error");
+            } finally {
+                editSubmit.disabled = false;
+                editSubmit.textContent = 'Salvar';
+            }
+        }
+
+        // Excluir mensagem
+        async function deleteMessage(id) {
+            if (!confirm("Tem certeza que deseja excluir esta mensagem?")) return;
+
+            try {
+                const tx = await contract.excluirMensagem(id);
+                await tx.wait();
+                showNotification("Mensagem excluída com sucesso!", "success");
+                await loadMessages();
+            } catch (error) {
+                console.error("Erro ao excluir mensagem:", error);
+                let errorMessage = "Erro ao excluir mensagem.";
+                if (error.reason && error.reason.includes("Somente")) {
+                    errorMessage = "Apenas o remetente ou o dono pode excluir esta mensagem.";
+                } else if (error.reason) {
+                    errorMessage = error.reason;
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                showNotification(errorMessage, "error");
+            }
+        }
+
+        // Mostrar notificação
+        function showNotification(message, type = "info") {
+            notification.className = `notification ${type}`;
+            notification.querySelector('.notification-icon').innerHTML = type === "success" ? '✓' : type === "error" ? '✕' : '!';
+            notificationContent.textContent = message;
+            notification.classList.add('active');
+            setTimeout(() => {
+                notification.classList.remove('active');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
